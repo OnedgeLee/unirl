@@ -1,0 +1,5 @@
+obs:
+  dummy_obs_1:
+    type: vector
+    default: [1,0,0]
+    description: dummy observation 1

@@ -1,0 +1,14 @@
+state:
+  dummy_state_1:
+    preprocess:
+      - concatenate:
+          kwargs:
+            target:
+              type: obs_list
+              arg: [dummy_obs_1, dummy_obs_2]
+          return: dummy_state_1
+    type: vector
+    spec: 
+      shape: [-1, 12]
+      min: -1
+      max: 1

@@ -1,0 +1,17 @@
+learn_args:
+  algorithm: ppo
+  total_steps: 1.e+10
+  batch_steps: 2048
+  eval_episodes: 128
+  n_minibatches_per_model: 4
+  n_opt_epochs: 4
+  lr: 1.e-4
+  max_grad_norm: 0.5
+  cliprange: 0.1
+  coef_el: 1.e-2
+  coef_vl: 0.5
+  gam: 0.99
+  lam: 0.95
+  log_steps: 1
+  debug: False
+  save_path: ./ckpt

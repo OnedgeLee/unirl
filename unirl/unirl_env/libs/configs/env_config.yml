@@ -1,0 +1,5 @@
+env_func:
+  - dummy_env_func_1
+
+setting:
+  dummy_env_setting: 1

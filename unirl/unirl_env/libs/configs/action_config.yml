@@ -1,0 +1,3 @@
+action_domain:
+  dummy_action_1: [0, 1]
+  dummy_action_2: [0, 1, 2, 3, 4, 5]

@@ -1,0 +1,59 @@
+state_encoder:
+
+  - state: dummy_state_1
+    encoder: ScalarEncoder
+    kwargs:
+      d_x: 12
+      d_encoder: 64
+
+  - state: dummy_state_2
+    encoder: PolygonEncoder
+    kwargs:
+      d_seq: 32
+      d_encoder: 64
+
+  - state: dummy_state_3
+    encoder: LinestringEntityEncoder
+    kwargs:
+      d_seq: 8
+      d_encoder: 64
+
+  - state: dummy_state_4
+    encoder: PolygonEntityEncoder
+    kwargs:
+      d_seq: 4
+      d_encoder: 64
+
+
+core_encoder:
+
+  encoder: Core
+  kwargs:
+    d_x: 1728
+    d_head: 96
+    ds_hidden: [768, 384, 192]
+
+
+action_head:
+
+  - action: dummy_action_1
+    head: CategoricalHead
+    kwargs: 
+      d_out: 2
+      d_head: 96
+      ds_hidden: [32, 16, 8]
+      ds_ar_hidden: [16, 32]
+    rationales: [action_none]
+      
+  - action: dummy_action_2
+    head: EntityHead
+    kwargs: 
+      d_encoder: 64
+      d_head: 96
+    rationales: [action_none, dummy_state_4]
+      
+      
+value_predictor:
+  predictor: ScalarPredictor
+  kwargs:
+    d_head: 96
