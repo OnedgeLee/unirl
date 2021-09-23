@@ -13,6 +13,8 @@ class RlRunner():
         self.env_setting = self.env_config["setting"]
         self.obs_config = yaml_config["obs"]
         self.state_config = yaml_config["state"]
+        self.action_config = yaml_config["action"]
+        self.action_domain_config = self.action_config["action_domain"]
         
         
     def preprocess(self, obs):
@@ -43,17 +45,17 @@ class RlRunner():
 
         done = True
         while done:
-            obs, done, act_mask = globals()["reset"](self.obs_config, self.env_setting)
+            obs, done, act_mask = globals()["reset"](self.obs_config, self.action_domain_config, self.env_setting)
         state = self.preprocess(obs)
         
         batch_obs, batch_states, batch_actions, batch_rewards, batch_values, batch_logits, batch_neglogps, batch_dones, batch_act_masks, batch_neglogp_masks = [],[],[],[],[],[],[],[],[],[]
     
         env_idx = 0
         for i in range(batch_steps):
-            env_key = self.env_func_config[env_idx % len(self.env_order_config)]
+            env_key = self.env_func_config[env_idx % len(self.env_func_config)]
             
             action_sample, action_logit, action_neglogp, action_entropy, value = model.step(state, act_mask)
-            next_obs, reward, next_done, neglogp_mask, nextact_mask = globals()[env_key](obs, action_sample, self.env_setting)
+            next_obs, reward, next_done, neglogp_mask, nextact_mask = globals()[env_key](obs, action_sample, self.action_domain_config, self.env_setting)
             next_state = self.preprocess(next_obs)
             
             batch_obs.append(obs)
@@ -76,7 +78,7 @@ class RlRunner():
 
             if done:
                 while done:
-                    obs, done, act_mask = globals()["reset"](self.obs_config, self.env_setting)
+                    obs, done, act_mask = globals()["reset"](self.obs_config, self.action_domain_config, self.env_setting)
                 state = self.preprocess(obs)
                 env_idx = 0
 
