@@ -82,7 +82,8 @@ class RlModel(nn.Module):
 
         state_emb = {}
         entity_emb = {}
-        for state_key, encoder_info in self.state_encoder_config.items():
+        for state_encoder_config in self.state_encoder_configs:
+            state_key = state_encoder_config["state"]
             encoder = getattr(self, "_".join([state_key, "encoder"]))
             encoded = encoder(state[state_key])
             if isinstance(encoder, globals()["EntityEncoder"]):
@@ -109,8 +110,9 @@ class RlModel(nn.Module):
         action_emb = {}
         action_emb["none"] = core_emb
 
-        for action_key in self.action_order_config:
-            rationale_keys = self.action_sampling_config[action_key]["rationales"]
+        for action_head_config in self.action_head_configs:
+            action_key = action_head_config["action"]
+            rationale_keys = action_head_config["rationales"]
             rationales = []
             for rationale_key in rationale_keys:
                 rationale_key_splitted = rationale_key.split("_")
@@ -142,16 +144,17 @@ class RlModel(nn.Module):
 
         state_emb = {}
         entity_emb = {}
-        for state_key in self.state_order_config:
+        for state_encoder_config in self.state_encoder_configs:
+            state_key = state_encoder_config["state"]
             encoder = getattr(self, "_".join([state_key, "encoder"]))
             encoded = encoder(batch_states[state_key])
-            if isinstance(encoder, globals()[self.agent_cls_config["entity_encoder"]["name"]]):
+            if isinstance(encoder, globals()["EntityEncoder"]):
                 state_emb[state_key] = encoded[1]
                 entity_emb[state_key] = encoded[0]
-            elif isinstance(encoder, globals()[self.agent_cls_config["polygon_entity_encoder"]["name"]]):
+            elif isinstance(encoder, globals()["PolygonEntityEncoder"]):
                 state_emb[state_key] = encoded[1]
                 entity_emb[state_key] = encoded[0]
-            elif isinstance(encoder, globals()[self.agent_cls_config["linestring_entity_encoder"]["name"]]):
+            elif isinstance(encoder, globals()["LinestringEntityEncoder"]):
                 state_emb[state_key] = encoded[1]
                 entity_emb[state_key] = encoded[0]
             else:
@@ -169,8 +172,9 @@ class RlModel(nn.Module):
         action_emb = {}
         action_emb["none"] = core_emb
 
-        for action_key in self.action_order_config:
-            rationale_keys = self.action_sampling_config[action_key]["rationales"]
+        for action_head_config in self.action_head_configs:
+            action_key = action_head_config["action"]
+            rationale_keys = action_head_config["rationales"]
             rationales = []
             for rationale_key in rationale_keys:
                 rationale_key_splitted = rationale_key.split("_")
@@ -198,16 +202,17 @@ class RlModel(nn.Module):
 
         state_emb = {}
         entity_emb = {}
-        for state_key in self.state_order_config:
+        for state_encoder_config in self.state_encoder_configs:
+            state_key = state_encoder_config["state"]
             encoder = getattr(self, "_".join([state_key, "encoder"]))
             encoded = encoder(state[state_key])
-            if isinstance(encoder, globals()[self.agent_cls_config["entity_encoder"]["name"]]):
+            if isinstance(encoder, globals()["EntityEncoder"]):
                 state_emb[state_key] = encoded[1]
                 entity_emb[state_key] = encoded[0]
-            elif isinstance(encoder, globals()[self.agent_cls_config["polygon_entity_encoder"]["name"]]):
+            elif isinstance(encoder, globals()["PolygonEntityEncoder"]):
                 state_emb[state_key] = encoded[1]
                 entity_emb[state_key] = encoded[0]
-            elif isinstance(encoder, globals()[self.agent_cls_config["linestring_entity_encoder"]["name"]]):
+            elif isinstance(encoder, globals()["LinestringEntityEncoder"]):
                 state_emb[state_key] = encoded[1]
                 entity_emb[state_key] = encoded[0]
             else:
@@ -223,8 +228,9 @@ class RlModel(nn.Module):
         action_emb = {}
         action_emb["none"] = core_emb
 
-        for action_key in self.action_order_config:
-            rationale_keys = action_sampling_config[action_key].rationales
+        for action_head_config in self.action_head_configs:
+            action_key = action_head_config["action"]
+            rationale_keys = action_head_config["rationales"]
             rationales = [action_emb[rationale_key] for rationale_key in rationale_keys]
             action_mode_, action_logit_, _, action_emb[action_key] = getattr(self, "_".join([action_key, "head"])).mode(*rationales, mask=action_mask[action_key])
             action_mode[action_key], action_logit[action_key] = action_mode_.numpy(), action_logit_.numpy()
@@ -239,16 +245,17 @@ class RlModel(nn.Module):
 
         state_emb = {}
         entity_emb = {}
-        for state_key in self.state_order_config:
+        for state_encoder_config in self.state_encoder_configs:
+            state_key = state_encoder_config["state"]
             encoder = getattr(self, "_".join([state_key, "encoder"]))
             encoded = encoder(state[state_key])
-            if isinstance(encoder, globals()[self.agent_cls_config["entity_encoder"]["name"]]):
+            if isinstance(encoder, globals()["EntityEncoder"]):
                 state_emb[state_key] = encoded[1]
                 entity_emb[state_key] = encoded[0]
-            elif isinstance(encoder, globals()[self.agent_cls_config["polygon_entity_encoder"]["name"]]):
+            elif isinstance(encoder, globals()["PolygonEntityEncoder"]):
                 state_emb[state_key] = encoded[1]
                 entity_emb[state_key] = encoded[0]
-            elif isinstance(encoder, globals()[self.agent_cls_config["linestring_entity_encoder"]["name"]]):
+            elif isinstance(encoder, globals()["LinestringEntityEncoder"]):
                 state_emb[state_key] = encoded[1]
                 entity_emb[state_key] = encoded[0]
             else:
