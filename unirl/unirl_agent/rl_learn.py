@@ -11,7 +11,7 @@ import wandb
 
 def learn(yaml_config):
 
-    learn_args = yaml_config["agent"]["learn_args"]
+    learn_args = yaml_config["learn"]["learn_args"]
     wandb.init(
         project="dummy-project",
         notes="experiments for 0.0.0",
