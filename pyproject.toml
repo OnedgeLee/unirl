@@ -5,7 +5,7 @@ description = "A strongly-typed, modular reinforcement learning framework built 
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.12"
-dependencies = []
+dependencies = ["pyyaml>=6.0"]
 
 [project.optional-dependencies]
 dev = [

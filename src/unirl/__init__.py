@@ -8,6 +8,7 @@ from unirl.interfaces import (
     StepResult,
     Transition,
 )
+from unirl.system import System
 
 __all__ = [
     "ActAdapter",
@@ -15,5 +16,6 @@ __all__ = [
     "Env",
     "ObsAdapter",
     "StepResult",
+    "System",
     "Transition",
 ]
