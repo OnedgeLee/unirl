@@ -6,5 +6,5 @@ try:
     from unirl.impl.agents.reinforce_agent import REINFORCEAgent
 
     __all__ = ["REINFORCEAgent", "TorchAgent"]
-except ImportError:
+except (ImportError, RuntimeError):
     __all__ = ["TorchAgent"]

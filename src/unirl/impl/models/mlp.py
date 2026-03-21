@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
-import torch
-import torch.nn as nn
+try:
+    import torch
+    import torch.nn as nn
+except ImportError as e:
+    raise RuntimeError(
+        "unirl.impl requires PyTorch. Install it with: pip install 'unirl[impl]'"
+    ) from e
 
 
 class MLP(nn.Module):

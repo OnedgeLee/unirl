@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
-import torch
-import torch.nn as nn
-from torch.distributions import Categorical
-from torch.optim import Optimizer
+try:
+    import torch
+    import torch.nn as nn
+    from torch.distributions import Categorical
+    from torch.optim import Optimizer
+except ImportError as e:
+    raise RuntimeError(
+        "unirl.impl requires PyTorch. Install it with: pip install 'unirl[impl]'"
+    ) from e
 
 from unirl.interfaces.types import Transition
 

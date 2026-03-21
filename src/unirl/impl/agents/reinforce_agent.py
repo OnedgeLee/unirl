@@ -24,8 +24,13 @@ action type is ``int`` (a discrete action index).
 
 from __future__ import annotations
 
-import torch
-from torch.distributions import Categorical
+try:
+    import torch
+    from torch.distributions import Categorical
+except ImportError as e:
+    raise RuntimeError(
+        "unirl.impl requires PyTorch. Install it with: pip install 'unirl[impl]'"
+    ) from e
 
 from unirl.impl.agents.torch_agent import TorchAgent
 from unirl.impl.learners.reinforce import REINFORCETrainer

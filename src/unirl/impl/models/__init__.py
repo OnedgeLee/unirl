@@ -4,5 +4,5 @@ try:
     from unirl.impl.models.mlp import MLP
 
     __all__ = ["MLP"]
-except ImportError:
+except (ImportError, RuntimeError):
     __all__ = []

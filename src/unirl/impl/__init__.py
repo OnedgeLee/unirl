@@ -52,13 +52,9 @@ core interface layer**.  A search agent only needs to satisfy the top-level
 ``Agent`` protocol (``act`` + ``observe``) to plug into ``System``.
 
 .. note::
-    Install torch before importing this package::
+    PyTorch is required to use this package::
 
-        pip install torch
-
-    or, if you are using the ``unirl`` extras::
-
-        pip install "unirl[torch]"
+        pip install "unirl[impl]"
 """
 
 from unirl.impl.agents.torch_agent import TorchAgent
@@ -74,10 +70,24 @@ __all__ = [
     "Trainer",
 ]
 
+# Names that require PyTorch — populated when torch is available.
+_TORCH_ONLY: frozenset[str] = frozenset({"MLP", "REINFORCEAgent"})
+
 try:
     from unirl.impl.agents.reinforce_agent import REINFORCEAgent
     from unirl.impl.models.mlp import MLP
 
     __all__ = __all__ + ["MLP", "REINFORCEAgent"]
-except ImportError:
+except (ImportError, RuntimeError):
     pass
+
+
+def __getattr__(name: str) -> object:
+    """Raise a helpful RuntimeError for torch-only names when torch is absent."""
+    if name in _TORCH_ONLY:
+        raise RuntimeError(
+            f"'unirl.impl.{name}' requires PyTorch. "
+            "Install it with: pip install 'unirl[impl]'"
+        )
+    raise AttributeError(f"module 'unirl.impl' has no attribute {name!r}")
+
