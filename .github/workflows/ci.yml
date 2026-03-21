@@ -36,8 +36,8 @@ jobs:
       - name: Run ruff
         run: uv run ruff check .
 
-  type-check:
-    name: Type Check (pyright)
+  type-check-core:
+    name: Type Check core (pyright, no impl)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -59,11 +59,37 @@ jobs:
       - name: Install dependencies
         run: uv sync --extra dev
 
-      - name: Run pyright
+      - name: Run pyright (core only, impl excluded)
+        run: uv run pyright --project pyrightconfig.core.json
+
+  type-check-impl:
+    name: Type Check impl (pyright, with torch)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies (with impl extras)
+        run: uv sync --extra dev --extra impl
+
+      - name: Run pyright (full, including impl)
         run: uv run pyright
 
-  test:
-    name: Test (pytest)
+  test-core:
+    name: Test core (pytest, no impl)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -87,3 +113,30 @@ jobs:
 
       - name: Run pytest
         run: uv run pytest
+
+  test-impl:
+    name: Test impl (pytest, with torch)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies (with impl extras)
+        run: uv sync --extra dev --extra impl
+
+      - name: Run pytest
+        run: uv run pytest
+

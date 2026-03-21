@@ -57,7 +57,7 @@ Four type variables flow through the entire pipeline:
 
 ```
 src/unirl/
-├── __init__.py          # Top-level re-exports
+├── __init__.py          # Top-level re-exports (no torch)
 ├── interfaces/          # Protocol definitions (structural typing)
 │   ├── __init__.py
 │   ├── types.py         # StepResult, Transition dataclasses
@@ -73,12 +73,24 @@ src/unirl/
 ├── config/
 │   ├── __init__.py
 │   └── loader.py        # system_from_yaml / system_from_config
-└── examples/            # Concrete implementations (reference + tests)
-    ├── simple_env.py
-    ├── simple_agent.py
-    ├── simple_adapter.py
-    └── configs/
-        └── simple.yaml
+├── examples/            # Minimal reference agents (no torch)
+│   ├── simple_env.py
+│   ├── simple_agent.py
+│   ├── simple_adapter.py
+│   └── configs/
+│       └── simple.yaml
+└── impl/                # Torch-based implementations (opt-in)
+    ├── __init__.py      # Convenient re-exports + usage docs
+    ├── interfaces.py    # Torch-side protocols: Actor, Trainer, SearchActor, …
+    ├── agents/
+    │   ├── torch_agent.py     # TorchAgent — generic Actor + Trainer glue
+    │   └── reinforce_agent.py # REINFORCEAgent — discrete policy-gradient
+    ├── models/
+    │   └── mlp.py             # MLP — configurable feed-forward network
+    ├── learners/
+    │   └── reinforce.py       # REINFORCETrainer — Monte Carlo PG update
+    └── buffers/
+        └── episode_buffer.py  # EpisodeBuffer — per-episode trajectory store
 ```
 
 ---
@@ -329,6 +341,85 @@ env:
 ```
 
 A fully worked example is available in [`src/unirl/examples/configs/simple.yaml`](src/unirl/examples/configs/simple.yaml) together with the concrete implementations in [`src/unirl/examples/`](src/unirl/examples/).
+
+---
+
+## Torch-based Implementations (`unirl.impl`)
+
+`unirl.impl` provides **library-quality, torch-based** implementations of RL agents, neural modules, learners, and replay buffers.  Torch is an **opt-in dependency** — importing `unirl` alone never pulls it in.
+
+### Installation
+
+```bash
+pip install "unirl[torch]"
+# or directly:
+pip install torch
+```
+
+### Quick start — REINFORCE agent
+
+```python
+import torch
+from unirl.impl.agents.reinforce_agent import REINFORCEAgent
+
+# Create a discrete-action REINFORCE agent for a 4-dim observation space
+agent = REINFORCEAgent(obs_dim=4, n_actions=2)
+
+obs = torch.zeros(4)
+action = agent.act(obs)                   # int
+
+agent.observe(obs, action, reward=1.0, next_obs=torch.zeros(4),
+              terminated=True, truncated=False)
+# ↑ triggers a REINFORCE parameter update at episode end
+```
+
+### Authoring a new agent
+
+1. **Define an Actor** — implement [`Actor[ObsT, ActT]`](src/unirl/impl/interfaces.py) (one `act` method).
+2. **Define a Trainer** (optional) — implement [`Trainer[ObsT, ActT]`](src/unirl/impl/interfaces.py) (one `train` method).
+3. **Compose with `TorchAgent`** — the wrapper handles episode bookkeeping and automatically calls `trainer.train` at episode end.
+4. **Register** — decorate with `@register_agent("my_agent")` for YAML/config use.
+
+```python
+import torch
+from unirl.impl.agents.torch_agent import TorchAgent
+from unirl.registry import register_agent
+
+
+class MyActor:
+    def act(self, obs: torch.Tensor) -> int:
+        return 0  # replace with your policy
+
+
+class MyTrainer:
+    def train(self, transitions):
+        pass  # replace with your learning update
+
+
+@register_agent("my_agent")
+class MyAgent:
+    def __init__(self):
+        self._agent = TorchAgent(actor=MyActor(), trainer=MyTrainer())
+
+    def act(self, obs):
+        return self._agent.act(obs)
+
+    def observe(self, obs, action, reward, next_obs, terminated, truncated):
+        self._agent.observe(obs, action, reward, next_obs, terminated, truncated)
+```
+
+### Torch-side protocols (`unirl.impl.interfaces`)
+
+| Protocol | Description |
+|---|---|
+| `Actor[ObsT, ActT]` | Selects an action given an observation |
+| `Trainer[ObsT, ActT]` | Runs a learning update on episode transitions |
+| `SearchActor[ObsT, ActT]` | Actor with explicit search budget (MCTS, AlphaGo Zero, …) |
+| `Checkpointable` | Saves/restores state to/from a path |
+
+### Extensibility for non-standard agents
+
+The `Actor` / `Trainer` split is intentional: search-based agents (AlphaGo Zero, MuZero), model-based agents, and any other exotic architecture only need to satisfy the top-level `Agent` protocol (`act` + `observe`) to plug into `System`.  They can implement `SearchActor` alongside or instead of `Actor` without any changes to the core interface layer.
 
 ---
 
