@@ -34,10 +34,10 @@ Key properties:
 │  act_adapter.to_env_act()                                           │
 │       │ EnvActT                                                     │
 │       ▼                                                             │
-│  env.step()  ──►  StepResult[EnvObsT]                              │
+│  env.step()  ──►  StepResult[EnvObsT]                               │
 │       │ EnvObsT (next obs)                                          │
 │       ▼                                                             │
-│  obs_adapter.to_agent_obs()  ──►  AgentObsT (next agent obs)       │
+│  obs_adapter.to_agent_obs()  ──►  AgentObsT (next agent obs)        │
 │       │                                                             │
 │       ▼                                                             │
 │  agent.observe(obs, action, reward, next_obs, terminated, truncated)│
