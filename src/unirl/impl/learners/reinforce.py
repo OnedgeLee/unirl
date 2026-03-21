@@ -72,12 +72,13 @@ class REINFORCETrainer:
         for t in transitions:
             logits = self._policy(t.obs)
             dist = Categorical(logits=logits)
-            log_probs.append(dist.log_prob(torch.tensor(t.action)))
+            log_prob: torch.Tensor = dist.log_prob(torch.tensor(t.action))  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
+            log_probs.append(log_prob)  # pyright: ignore[reportUnknownArgumentType]
 
         policy_loss: torch.Tensor = torch.stack(
             [-lp * ret for lp, ret in zip(log_probs, returns_tensor)]
         ).sum()
 
         self._optimizer.zero_grad()
-        policy_loss.backward()
+        policy_loss.backward()  # pyright: ignore[reportUnknownMemberType]
         self._optimizer.step()

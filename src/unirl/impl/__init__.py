@@ -57,9 +57,20 @@ core interface layer**.  A search agent only needs to satisfy the top-level
         pip install "unirl[impl]"
 """
 
-from unirl.impl.agents.torch_agent import TorchAgent
-from unirl.impl.buffers.episode_buffer import EpisodeBuffer
-from unirl.impl.interfaces import Actor, Checkpointable, SearchActor, Trainer
+from unirl.impl.agents.torch_agent import TorchAgent as TorchAgent
+from unirl.impl.buffers.episode_buffer import EpisodeBuffer as EpisodeBuffer
+from unirl.impl.interfaces import (
+    Actor as Actor,
+)
+from unirl.impl.interfaces import (
+    Checkpointable as Checkpointable,
+)
+from unirl.impl.interfaces import (
+    SearchActor as SearchActor,
+)
+from unirl.impl.interfaces import (
+    Trainer as Trainer,
+)
 
 __all__ = [
     "Actor",
@@ -74,10 +85,8 @@ __all__ = [
 _TORCH_ONLY: frozenset[str] = frozenset({"MLP", "REINFORCEAgent"})
 
 try:
-    from unirl.impl.agents.reinforce_agent import REINFORCEAgent
-    from unirl.impl.models.mlp import MLP
-
-    __all__ = __all__ + ["MLP", "REINFORCEAgent"]
+    from unirl.impl.agents.reinforce_agent import REINFORCEAgent as REINFORCEAgent
+    from unirl.impl.models.mlp import MLP as MLP
 except (ImportError, RuntimeError):
     pass
 

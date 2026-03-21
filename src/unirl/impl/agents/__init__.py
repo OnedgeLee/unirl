@@ -1,10 +1,10 @@
 """UniRL impl agents package."""
 
-from unirl.impl.agents.torch_agent import TorchAgent
+from unirl.impl.agents.torch_agent import TorchAgent as TorchAgent
+
+__all__ = ["TorchAgent"]
 
 try:
-    from unirl.impl.agents.reinforce_agent import REINFORCEAgent
-
-    __all__ = ["REINFORCEAgent", "TorchAgent"]
+    from unirl.impl.agents.reinforce_agent import REINFORCEAgent as REINFORCEAgent
 except (ImportError, RuntimeError):
-    __all__ = ["TorchAgent"]
+    pass

@@ -1,8 +1,6 @@
 """UniRL impl learners package."""
 
 try:
-    from unirl.impl.learners.reinforce import REINFORCETrainer
-
-    __all__ = ["REINFORCETrainer"]
+    from unirl.impl.learners.reinforce import REINFORCETrainer as REINFORCETrainer
 except (ImportError, RuntimeError):
-    __all__ = []
+    pass
