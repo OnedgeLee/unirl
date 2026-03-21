@@ -309,15 +309,15 @@ class TestImplPackageImport:
     def test_top_level_torch_imports(self) -> None:
         pytest.importorskip("torch")
         from unirl.impl import (  # noqa: F401
-            MLP,
             Actor,
             Checkpointable,
             EpisodeBuffer,
-            REINFORCEAgent,
             SearchActor,
             TorchAgent,
             Trainer,
         )
+        from unirl.impl.agents.reinforce_agent import REINFORCEAgent  # noqa: F401
+        from unirl.impl.models.mlp import MLP  # noqa: F401
 
     def test_root_unirl_does_not_import_torch(self) -> None:
         """Importing the root unirl package must not pull in torch."""
