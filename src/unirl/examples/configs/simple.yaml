@@ -1,0 +1,29 @@
+# Minimal UniRL config — selects implementations only; no typing logic.
+#
+# 'imports' lists Python modules whose @register_* decorators must run
+# before the registry is queried.  YAML does not carry type information;
+# type safety is enforced by pyright at concrete call sites.
+
+imports:
+  - unirl.examples.simple_env
+  - unirl.examples.simple_agent
+  - unirl.examples.simple_adapter
+
+env:
+  name: simple_env
+  kwargs:
+    limit: 5.0
+    max_steps: 50
+
+agent:
+  name: simple_agent
+
+obs_adapter:
+  name: simple_obs_adapter
+  kwargs:
+    limit: 5.0
+
+act_adapter:
+  name: simple_act_adapter
+  kwargs:
+    scale: 1.0
