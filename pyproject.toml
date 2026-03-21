@@ -33,6 +33,7 @@ select = ["E", "F", "I", "UP"]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
 include = ["src"]
+exclude = ["src/unirl/impl"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

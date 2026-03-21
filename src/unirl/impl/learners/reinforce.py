@@ -13,10 +13,10 @@ from unirl.interfaces.types import Transition
 def _compute_returns(rewards: list[float], gamma: float) -> list[float]:
     """Compute discounted returns for a sequence of rewards."""
     returns: list[float] = []
-    G = 0.0
+    cumulative = 0.0
     for r in reversed(rewards):
-        G = r + gamma * G
-        returns.insert(0, G)
+        cumulative = r + gamma * cumulative
+        returns.insert(0, cumulative)
     return returns
 
 
@@ -70,7 +70,7 @@ class REINFORCETrainer:
             log_probs.append(dist.log_prob(torch.tensor(t.action)))
 
         policy_loss: torch.Tensor = torch.stack(
-            [-lp * G for lp, G in zip(log_probs, returns_tensor)]
+            [-lp * ret for lp, ret in zip(log_probs, returns_tensor)]
         ).sum()
 
         self._optimizer.zero_grad()
