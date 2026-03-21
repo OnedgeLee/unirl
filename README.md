@@ -59,15 +59,19 @@ Four type variables flow through the entire pipeline:
 src/unirl/
 ├── __init__.py          # Top-level re-exports
 ├── interfaces/          # Protocol definitions (structural typing)
+│   ├── __init__.py
 │   ├── types.py         # StepResult, Transition dataclasses
 │   ├── env.py           # Env protocol
 │   ├── agent.py         # Agent protocol
 │   └── adapter.py       # ObsAdapter, ActAdapter protocols
 ├── system/
+│   ├── __init__.py
 │   └── system.py        # System — episode-loop orchestrator
 ├── registry/
+│   ├── __init__.py
 │   └── registry.py      # @register_* decorators + build_system
 ├── config/
+│   ├── __init__.py
 │   └── loader.py        # system_from_yaml / system_from_config
 └── examples/            # Concrete implementations (reference + tests)
     ├── simple_env.py
@@ -174,7 +178,7 @@ system = System(
     act_adapter=act_adapter,
 )
 
-transitions: list[Transition[AgentObsT, AgentActT]] = system.run_episode()
+transitions = system.run_episode()
 ```
 
 `run_episode()` calls `env.reset()`, then loops until either `terminated` or `truncated` is `True`, collecting a `Transition` at each step and calling `agent.observe()` for online learning. The full list of transitions is returned for offline analysis.
@@ -385,7 +389,7 @@ All CI jobs run in parallel across Python 3.12 and 3.13 with `fail-fast` disable
 ### Contributing
 
 1. Fork the repository and create a feature branch.
-2. Implement your changes and ensure all checks pass (`ruff check .`, `pyright`, `pytest`).
+2. Implement your changes and ensure all checks pass (preferably via the pinned toolchain: `uv run ruff check .`, `uv run pyright`, `uv run pytest`).
 3. Open a pull request against `main` with a clear description of the change.
 
 New environment or agent implementations should follow the pattern in `src/unirl/examples/`: use `@register_*` decorators, keep observation and action types as plain `dataclass` objects, and include tests in `tests/`.
