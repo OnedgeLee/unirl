@@ -1,4 +1,4 @@
-# unirl
+# UniRL
 
 A strongly-typed, modular reinforcement learning framework built around composable interfaces.
 
@@ -11,7 +11,6 @@ Key properties:
 - **No inheritance required** — components satisfy interfaces structurally; any class with the right methods works.
 - **Full generic type-safety** — the `System` class propagates four distinct type parameters so that mismatches are caught by a static type checker (pyright in strict mode).
 - **Pluggable by design** — a decorator-based registry and a YAML loader let you swap implementations without touching orchestration code.
-- **Minimal dependencies** — only `pyyaml` is required at runtime.
 
 ---
 
