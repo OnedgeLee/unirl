@@ -1,4 +1,4 @@
-"""Core data types for the UniRL interface system."""
+"""Core data types for the UniRL framework."""
 
 from dataclasses import dataclass
 from typing import Any
@@ -17,7 +17,12 @@ class StepResult[EnvObsT]:
 
 @dataclass
 class Transition[AgentObsT, AgentActT]:
-    """A single agent-side transition record."""
+    """A single agent-side transition record.
+
+    ``Transition`` is a minimal convenience type suitable for simple
+    on-policy examples.  Algorithm-specific trajectory or batch types
+    should live in ``unirl.impl`` and are not constrained by this class.
+    """
 
     obs: AgentObsT
     action: AgentActT

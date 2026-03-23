@@ -27,13 +27,6 @@ class SimpleAgent:
         direction = -1.0 if obs.normalised > 0.0 else 1.0
         return SimpleAgentAct(direction=direction)
 
-    def observe(
-        self,
-        obs: SimpleAgentObs,
-        action: SimpleAgentAct,
-        reward: float,
-        next_obs: SimpleAgentObs,
-        terminated: bool,
-        truncated: bool,
-    ) -> None:
-        pass
+    def reset(self) -> None:
+        """No episode-local state to reset."""
+

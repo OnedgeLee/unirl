@@ -4,79 +4,87 @@ A strongly-typed, modular reinforcement learning framework built around composab
 
 ## Overview
 
-UniRL provides a clean, minimal foundation for building reinforcement learning systems in Python. Rather than shipping a monolithic algorithm library, UniRL defines a set of **structural protocols** (using Python's `typing.Protocol`) that describe how environments, agents, and adapters must behave, then wires them together with an explicit, fully-typed data pipeline.
+UniRL provides a clean, minimal foundation for building reinforcement learning systems in Python. Rather than shipping a monolithic algorithm library, UniRL defines a set of **structural protocols** (using Python's `typing.Protocol`) that describe how environments, agents, rollouts, batch sources, and learners must behave, then wires them together with an explicit, fully-typed data pipeline.
 
 Key properties:
 
 - **No inheritance required** — components satisfy interfaces structurally; any class with the right methods works.
-- **Full generic type-safety** — the `System` class propagates four distinct type parameters so that mismatches are caught by a static type checker (pyright in strict mode).
+- **Full generic type-safety** — all core protocols carry type parameters so that mismatches are caught by a static type checker (pyright in strict mode).
 - **Pluggable by design** — a decorator-based registry and a YAML loader let you swap implementations without touching orchestration code.
 
 ---
 
 ## Architecture
 
-### Data-flow overview
+### Dataflow overview
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                              System                                 │
-│                                                                     │
-│  env.reset()                                                        │
-│       │ EnvObsT                                                     │
-│       ▼                                                             │
-│  obs_adapter.to_agent_obs()                                         │
-│       │ AgentObsT                                                   │
-│       ▼                                                             │
-│  agent.act()                                                        │
-│       │ AgentActT                                                   │
-│       ▼                                                             │
-│  act_adapter.to_env_act()                                           │
-│       │ EnvActT                                                     │
-│       ▼                                                             │
-│  env.step()  ──►  StepResult[EnvObsT]                               │
-│       │ EnvObsT (next obs)                                          │
-│       ▼                                                             │
-│  obs_adapter.to_agent_obs()  ──►  AgentObsT (next agent obs)        │
-│       │                                                             │
-│       ▼                                                             │
-│  agent.observe(obs, action, reward, next_obs, terminated, truncated)│
-└─────────────────────────────────────────────────────────────────────┘
+Obs → Act → Trajectory → Batch → Update
 ```
 
-Four type variables flow through the entire pipeline:
+The control structure is:
+
+```
+Coordinator
+  → Rollout       (env interaction, trajectory production)
+       → Agent
+       → Env
+       → Adapters
+  → BatchSource   (trajectory ingestion, batch sampling)
+  → Learner       (parameter update)
+```
+
+Four type variables flow through the observation/action pipeline:
 
 | Variable | Produced by | Consumed by |
 |---|---|---|
-| `EnvObsT` | `env.reset` / `env.step` | `obs_adapter.to_agent_obs` |
-| `AgentObsT` | `obs_adapter.to_agent_obs` | `agent.act` / `agent.observe` |
-| `AgentActT` | `agent.act` | `act_adapter.to_env_act` / `agent.observe` |
-| `EnvActT` | `act_adapter.to_env_act` | `env.step` |
+| `EnvObsT` | `Env.reset` / `Env.step` | `ObsAdapter.to_agent_obs` |
+| `AgentObsT` | `ObsAdapter.to_agent_obs` | `Agent.act` |
+| `AgentActT` | `Agent.act` | `ActAdapter.to_env_act` |
+| `EnvActT` | `ActAdapter.to_env_act` | `Env.step` |
+
+### Parameter ownership
+
+```
+Agent reads shared parameters.
+Learner updates shared parameters.
+```
+
+The shared parameter object (e.g. a `torch.nn.Module` or a plain weight dict) is not abstracted in core. Concrete implementations in `unirl.impl` manage it directly and are responsible for keeping the agent and learner in sync.
 
 ### Package layout
 
 ```
 src/unirl/
 ├── __init__.py          # Top-level re-exports
-├── interfaces/          # Protocol definitions (structural typing)
+├── core/                # Framework-level protocol definitions
 │   ├── __init__.py
 │   ├── types.py         # StepResult, Transition dataclasses
 │   ├── env.py           # Env protocol
 │   ├── agent.py         # Agent protocol
-│   └── adapter.py       # ObsAdapter, ActAdapter protocols
-├── system/
-│   ├── __init__.py
-│   └── system.py        # System — episode-loop orchestrator
+│   ├── adapter.py       # ObsAdapter, ActAdapter protocols
+│   ├── rollout.py       # Rollout protocol
+│   ├── batch_source.py  # BatchSource protocol
+│   ├── learner.py       # Learner protocol
+│   └── coordinator.py   # Coordinator protocol + GenericCoordinator
 ├── registry/
 │   ├── __init__.py
-│   └── registry.py      # @register_* decorators + build_system
+│   └── registry.py      # @register_* decorators
 ├── config/
 │   ├── __init__.py
-│   └── loader.py        # system_from_yaml / system_from_config
-└── examples/            # Concrete implementations (reference + tests)
+│   └── loader.py        # components_from_yaml / components_from_config
+├── impl/                # Concrete (torch-based) implementations
+│   ├── __init__.py
+│   ├── agents/
+│   ├── rollouts/
+│   ├── batch_sources/
+│   ├── learners/
+│   └── models/
+└── examples/            # Reference implementations (torch-free)
     ├── simple_env.py
     ├── simple_agent.py
     ├── simple_adapter.py
+    ├── simple_rollout.py
     └── configs/
         └── simple.yaml
 ```
@@ -102,18 +110,13 @@ An environment resets to an initial observation and advances one step at a time 
 ```python
 class Agent[AgentObsT, AgentActT](Protocol):
     def act(self, obs: AgentObsT) -> AgentActT: ...
-    def observe(
-        self,
-        obs: AgentObsT,
-        action: AgentActT,
-        reward: float,
-        next_obs: AgentObsT,
-        terminated: bool,
-        truncated: bool,
-    ) -> None: ...
+    def reset(self) -> None: ...
 ```
 
-An agent selects actions and learns from transitions. The `observe` method receives the complete transition tuple so that the agent can update its internal state (e.g. replay buffer, policy parameters).
+An agent is a *decision operator* — it selects actions given observations. It is **not** the place where learning happens.
+
+- `act` produces an action from an observation.
+- `reset` is called by `Rollout` at the start of each episode to clear any episode-local state (e.g. RNN hidden state, search tree, frame buffer).
 
 ### `ObsAdapter[EnvObsT, AgentObsT]`
 
@@ -133,6 +136,49 @@ class ActAdapter[AgentActT, EnvActT](Protocol):
 
 Translates agent actions back into the format accepted by the environment (e.g. scaling, discretisation, encoding).
 
+### `Rollout[EnvObsT, EnvActT, AgentObsT, AgentActT, TrajT]`
+
+```python
+class Rollout[EnvObsT, EnvActT, AgentObsT, AgentActT, TrajT](Protocol):
+    def run_episode(
+        self,
+        env: Env[EnvObsT, EnvActT],
+        agent: Agent[AgentObsT, AgentActT],
+        obs_adapter: ObsAdapter[EnvObsT, AgentObsT],
+        act_adapter: ActAdapter[AgentActT, EnvActT],
+    ) -> TrajT: ...
+```
+
+`Rollout` owns environment interaction. It resets the env and agent, adapts observations and actions, steps the environment, and returns a trajectory of type `TrajT`. The trajectory type is left open so that different algorithms can use their own representations without being constrained by core.
+
+### `BatchSource[TrajT, BatchT]`
+
+```python
+class BatchSource[TrajT, BatchT](Protocol):
+    def ingest(self, traj: TrajT) -> None: ...
+    def sample(self, batch_size: int) -> BatchT: ...
+```
+
+`BatchSource` ingests trajectories produced by `Rollout` and supplies training batches to `Learner`. Implementations cover on-policy accumulators, replay buffers, and target-building stores.
+
+### `Learner[BatchT]`
+
+```python
+class Learner[BatchT](Protocol):
+    def update(self, batch: BatchT) -> None: ...
+```
+
+`Learner` receives a training batch and performs a parameter update. It is responsible for computing the loss and updating the shared parameters read by `Agent`.
+
+### `Coordinator`
+
+```python
+class Coordinator(Protocol):
+    def run(self) -> None: ...
+```
+
+`Coordinator` drives the full training loop. The reference implementation is `GenericCoordinator`.
+
 ### `StepResult`
 
 ```python
@@ -145,7 +191,7 @@ class StepResult[EnvObsT]:
     info: dict[str, Any]
 ```
 
-The value returned by `env.step`. `terminated` signals a natural episode end; `truncated` signals an artificial cut-off (e.g. time limit).
+The value returned by `Env.step`. `terminated` signals a natural episode end; `truncated` signals an artificial cut-off (e.g. time limit).
 
 ### `Transition`
 
@@ -160,28 +206,7 @@ class Transition[AgentObsT, AgentActT]:
     truncated: bool
 ```
 
-A single agent-side transition record built by `System.run_episode` and returned as a list at episode end.
-
----
-
-## System
-
-`System` wires the four components together and runs the episode loop:
-
-```python
-from unirl import System
-
-system = System(
-    env=env,
-    agent=agent,
-    obs_adapter=obs_adapter,
-    act_adapter=act_adapter,
-)
-
-transitions = system.run_episode()
-```
-
-`run_episode()` calls `env.reset()`, then loops until either `terminated` or `truncated` is `True`, collecting a `Transition` at each step and calling `agent.observe()` for online learning. The full list of transitions is returned for offline analysis.
+A minimal convenience record for simple on-policy rollouts. Algorithm-specific trajectory types live in `unirl.impl` and are not constrained by this class.
 
 ---
 
@@ -234,8 +259,8 @@ class MyAgent:
     def act(self, obs: MyAgentObs) -> MyAgentAct:
         return MyAgentAct(direction=-1.0 if obs.normalised > 0 else 1.0)
 
-    def observe(self, obs, action, reward, next_obs, terminated, truncated):
-        pass  # stateless — no learning
+    def reset(self) -> None:
+        pass  # stateless — nothing to reset
 
 
 class MyObsAdapter:
@@ -247,24 +272,44 @@ class MyActAdapter:
         return MyEnvAct(delta=agent_act.direction)
 ```
 
-### 2 — Assemble and run
+### 2 — Run a single episode
 
 ```python
-from unirl import System
+from unirl.examples.simple_rollout import SimpleRollout
 
-system = System(
-    env=MyEnv(),
-    agent=MyAgent(),
-    obs_adapter=MyObsAdapter(),
-    act_adapter=MyActAdapter(),
+rollout = SimpleRollout()
+transitions = rollout.run_episode(
+    MyEnv(),
+    MyAgent(),
+    MyObsAdapter(),
+    MyActAdapter(),
 )
-
-transitions = system.run_episode()
 print(f"Episode length: {len(transitions)}")
 print(f"Total reward:   {sum(t.reward for t in transitions):.1f}")
 ```
 
-### 3 — Use the registry and YAML config (optional)
+### 3 — Wire into the full training loop
+
+```python
+from unirl.core.coordinator import GenericCoordinator
+
+coordinator = GenericCoordinator(
+    rollout=rollout,
+    env=MyEnv(),
+    agent=MyAgent(),
+    obs_adapter=MyObsAdapter(),
+    act_adapter=MyActAdapter(),
+    batch_source=my_batch_source,   # implements BatchSource
+    learner=my_learner,             # implements Learner
+    batch_size=64,
+    rollouts_per_iter=4,
+    updates_per_iter=1,
+    max_iters=1000,
+)
+coordinator.run()
+```
+
+### 4 — Use the registry and YAML config (optional)
 
 Register implementations with decorators so they can be looked up by name at runtime:
 
@@ -288,7 +333,7 @@ class MyActAdapter:
     ...
 ```
 
-Then describe the system in a YAML file:
+Describe the components in a YAML file:
 
 ```yaml
 imports:
@@ -309,13 +354,15 @@ act_adapter:
   name: my_act_adapter
 ```
 
-And load it in one call:
+Load and assemble:
 
 ```python
-from unirl.config import system_from_yaml
+from unirl.config import components_from_yaml
+from unirl.examples.simple_rollout import SimpleRollout
 
-system = system_from_yaml("path/to/config.yaml")
-transitions = system.run_episode()
+env, agent, obs_adapter, act_adapter = components_from_yaml("path/to/config.yaml")
+rollout = SimpleRollout()
+transitions = rollout.run_episode(env, agent, obs_adapter, act_adapter)
 ```
 
 Constructor keyword arguments are forwarded via an optional `kwargs` map under each component entry:
@@ -340,7 +387,25 @@ A fully worked example is available in [`src/unirl/examples/configs/simple.yaml`
 | `register_agent(name)` | Decorator — register an `Agent` factory under `name` |
 | `register_obs_adapter(name)` | Decorator — register an `ObsAdapter` factory under `name` |
 | `register_act_adapter(name)` | Decorator — register an `ActAdapter` factory under `name` |
-| `build_system(*, env, agent, obs_adapter, act_adapter)` | Typed helper — assemble a `System` from pre-constructed components |
+| `register_rollout(name)` | Decorator — register a `Rollout` factory under `name` |
+
+---
+
+## `impl/` policy
+
+`src/unirl/impl/` is the home for concrete, typically torch-based implementations:
+
+```
+src/unirl/impl/
+├── __init__.py
+├── agents/         # concrete Agent implementations
+├── rollouts/       # concrete Rollout implementations
+├── batch_sources/  # concrete BatchSource implementations
+├── learners/       # concrete Learner implementations
+└── models/         # shared neural network components
+```
+
+`core/` defines contracts. `impl/` provides implementations. There is no duplicate protocol layer under `impl/`.
 
 ---
 
@@ -382,7 +447,6 @@ uv run pytest
 | Workflow | Trigger | Jobs |
 |---|---|---|
 | `ci.yml` | push / pull request | Lint (ruff), Type Check (pyright), Test (pytest) |
-| `release.yml` | tag (`v*`) / manual dispatch | Build, Publish to PyPI |
 
 All CI jobs run in parallel across Python 3.12 and 3.13 with `fail-fast` disabled so every matrix entry is reported independently.
 
@@ -399,3 +463,4 @@ New environment or agent implementations should follow the pattern in `src/unirl
 ## License
 
 [MIT](LICENSE)
+

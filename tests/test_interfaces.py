@@ -1,26 +1,26 @@
-"""End-to-end integration tests covering Phases 1–7."""
+"""End-to-end integration tests covering the refactored UniRL architecture."""
 
 from __future__ import annotations
 
 import textwrap
 from pathlib import Path
+from typing import Any
 
 import pytest
 
+from unirl.core.types import StepResult, Transition
 from unirl.examples.simple_adapter import SimpleActAdapter, SimpleObsAdapter
 from unirl.examples.simple_agent import SimpleAgent, SimpleAgentAct, SimpleAgentObs
 from unirl.examples.simple_env import SimpleEnv, SimpleEnvAct, SimpleEnvObs
-from unirl.interfaces.types import StepResult, Transition
+from unirl.examples.simple_rollout import SimpleRollout
 from unirl.registry.registry import (
     ACT_ADAPTER_REGISTRY,
     AGENT_REGISTRY,
     ENV_REGISTRY,
     OBS_ADAPTER_REGISTRY,
-    build_system,
     register_agent,
     register_env,
 )
-from unirl.system.system import System
 
 # ---------------------------------------------------------------------------
 # Phase 1 — Core types
@@ -57,34 +57,35 @@ class TestTransition:
 
 
 # ---------------------------------------------------------------------------
-# Phase 2 — Interfaces (structural subtyping checks)
+# Phase 2 — Core interfaces (structural subtyping checks)
 # ---------------------------------------------------------------------------
 
 
 class TestProtocolCompliance:
     def test_env_satisfies_protocol(self) -> None:
-        from unirl.interfaces.env import Env
+        from unirl.core.env import Env
 
         env: Env[SimpleEnvObs, SimpleEnvAct] = SimpleEnv()
         obs = env.reset()
         assert isinstance(obs, SimpleEnvObs)
 
     def test_agent_satisfies_protocol(self) -> None:
-        from unirl.interfaces.agent import Agent
+        from unirl.core.agent import Agent
 
         agent: Agent[SimpleAgentObs, SimpleAgentAct] = SimpleAgent()
+        agent.reset()
         act = agent.act(SimpleAgentObs(normalised=0.5))
         assert isinstance(act, SimpleAgentAct)
 
     def test_obs_adapter_satisfies_protocol(self) -> None:
-        from unirl.interfaces.adapter import ObsAdapter
+        from unirl.core.adapter import ObsAdapter
 
         adapter: ObsAdapter[SimpleEnvObs, SimpleAgentObs] = SimpleObsAdapter(limit=5.0)
         agent_obs = adapter.to_agent_obs(SimpleEnvObs(value=2.5))
         assert agent_obs.normalised == pytest.approx(0.5)
 
     def test_act_adapter_satisfies_protocol(self) -> None:
-        from unirl.interfaces.adapter import ActAdapter
+        from unirl.core.adapter import ActAdapter
 
         adapter: ActAdapter[SimpleAgentAct, SimpleEnvAct] = SimpleActAdapter(scale=1.0)
         env_act = adapter.to_env_act(SimpleAgentAct(direction=-1.0))
@@ -92,39 +93,72 @@ class TestProtocolCompliance:
 
 
 # ---------------------------------------------------------------------------
-# Phase 3 — System
+# Phase 3 — SimpleRollout
 # ---------------------------------------------------------------------------
 
 
-def _make_system() -> System[
-    SimpleEnvObs, SimpleEnvAct, SimpleAgentObs, SimpleAgentAct
-]:
-    return System(
-        env=SimpleEnv(limit=5.0, max_steps=20),
-        agent=SimpleAgent(),
-        obs_adapter=SimpleObsAdapter(limit=5.0),
-        act_adapter=SimpleActAdapter(scale=1.0),
+def _make_rollout_components() -> (
+    tuple[
+        SimpleEnv,
+        SimpleAgent,
+        SimpleObsAdapter,
+        SimpleActAdapter,
+    ]
+):
+    return (
+        SimpleEnv(limit=5.0, max_steps=20),
+        SimpleAgent(),
+        SimpleObsAdapter(limit=5.0),
+        SimpleActAdapter(scale=1.0),
     )
 
 
-class TestSystem:
+class TestSimpleRollout:
     def test_run_episode_returns_transitions(self) -> None:
-        system = _make_system()
-        transitions = system.run_episode()
+        rollout: SimpleRollout[
+            SimpleEnvObs, SimpleEnvAct, SimpleAgentObs, SimpleAgentAct
+        ] = SimpleRollout()
+        env, agent, obs_adapter, act_adapter = _make_rollout_components()
+        transitions = rollout.run_episode(env, agent, obs_adapter, act_adapter)
         assert len(transitions) > 0
         assert isinstance(transitions[0], Transition)
 
     def test_run_episode_terminates(self) -> None:
-        system = _make_system()
-        transitions = system.run_episode()
+        rollout: SimpleRollout[
+            SimpleEnvObs, SimpleEnvAct, SimpleAgentObs, SimpleAgentAct
+        ] = SimpleRollout()
+        env, agent, obs_adapter, act_adapter = _make_rollout_components()
+        transitions = rollout.run_episode(env, agent, obs_adapter, act_adapter)
         last = transitions[-1]
         assert last.terminated or last.truncated
 
     def test_run_episode_multiple_times(self) -> None:
-        system = _make_system()
+        rollout: SimpleRollout[
+            SimpleEnvObs, SimpleEnvAct, SimpleAgentObs, SimpleAgentAct
+        ] = SimpleRollout()
+        env, agent, obs_adapter, act_adapter = _make_rollout_components()
         for _ in range(3):
-            transitions = system.run_episode()
+            transitions = rollout.run_episode(env, agent, obs_adapter, act_adapter)
             assert len(transitions) > 0
+
+    def test_agent_reset_is_called(self) -> None:
+        """Verify that SimpleRollout calls agent.reset() before each episode."""
+        reset_count = 0
+
+        class TrackingAgent:
+            def act(self, obs: SimpleAgentObs) -> SimpleAgentAct:
+                return SimpleAgentAct(direction=-1.0 if obs.normalised > 0 else 1.0)
+
+            def reset(self) -> None:
+                nonlocal reset_count
+                reset_count += 1
+
+        rollout: SimpleRollout[
+            SimpleEnvObs, SimpleEnvAct, SimpleAgentObs, SimpleAgentAct
+        ] = SimpleRollout()
+        env, _, obs_adapter, act_adapter = _make_rollout_components()
+        rollout.run_episode(env, TrackingAgent(), obs_adapter, act_adapter)
+        assert reset_count == 1
 
 
 # ---------------------------------------------------------------------------
@@ -170,6 +204,10 @@ class TestSimpleAgent:
         act = agent.act(SimpleAgentObs(normalised=-0.5))
         assert act.direction == 1.0
 
+    def test_reset_does_not_raise(self) -> None:
+        agent = SimpleAgent()
+        agent.reset()  # stateless; should be a no-op
+
 
 # ---------------------------------------------------------------------------
 # Phase 5 — Registry
@@ -211,31 +249,10 @@ class TestRegistry:
             def act(self, obs: SimpleAgentObs) -> SimpleAgentAct:
                 return SimpleAgentAct(direction=0.0)
 
-            def observe(
-                self,
-                obs: SimpleAgentObs,
-                action: SimpleAgentAct,
-                reward: float,
-                next_obs: SimpleAgentObs,
-                terminated: bool,
-                truncated: bool,
-            ) -> None:
+            def reset(self) -> None:
                 pass
 
         assert "_test_agent" in AGENT_REGISTRY
-
-    def test_build_system_returns_system(self) -> None:
-        import unirl.examples.simple_adapter  # noqa: F401
-        import unirl.examples.simple_agent  # noqa: F401
-        import unirl.examples.simple_env  # noqa: F401
-
-        system = build_system(
-            env=SimpleEnv(),
-            agent=SimpleAgent(),
-            obs_adapter=SimpleObsAdapter(),
-            act_adapter=SimpleActAdapter(),
-        )
-        assert isinstance(system, System)
 
 
 # ---------------------------------------------------------------------------
@@ -244,7 +261,7 @@ class TestRegistry:
 
 
 class TestYAMLIntegration:
-    def test_system_from_yaml(self, tmp_path: Path) -> None:
+    def test_components_from_yaml(self, tmp_path: Path) -> None:
         yaml_text = textwrap.dedent("""\
             imports:
               - unirl.examples.simple_env
@@ -273,10 +290,11 @@ class TestYAMLIntegration:
         config_file = tmp_path / "test.yaml"
         config_file.write_text(yaml_text)
 
-        from unirl.config.loader import system_from_yaml
+        from unirl.config.loader import components_from_yaml
 
-        system = system_from_yaml(config_file)
-        transitions = system.run_episode()
+        env, agent, obs_adapter, act_adapter = components_from_yaml(config_file)
+        rollout: SimpleRollout[Any, Any, Any, Any] = SimpleRollout()
+        transitions = rollout.run_episode(env, agent, obs_adapter, act_adapter)
         assert len(transitions) > 0
 
     def test_unknown_env_raises(self, tmp_path: Path) -> None:
@@ -293,7 +311,80 @@ class TestYAMLIntegration:
         config_file = tmp_path / "bad.yaml"
         config_file.write_text(yaml_text)
 
-        from unirl.config.loader import system_from_yaml
+        from unirl.config.loader import components_from_yaml
 
         with pytest.raises(KeyError, match="no_such_env"):
-            system_from_yaml(config_file)
+            components_from_yaml(config_file)
+
+
+# ---------------------------------------------------------------------------
+# Phase 7 — GenericCoordinator
+# ---------------------------------------------------------------------------
+
+
+class TestGenericCoordinator:
+    def test_coordinator_runs_for_max_iters(self) -> None:
+        """GenericCoordinator drives the collect-then-update loop correctly."""
+        from unirl.core.coordinator import GenericCoordinator
+
+        collected: list[list[Transition[SimpleAgentObs, SimpleAgentAct]]] = []
+        updated: list[list[Transition[SimpleAgentObs, SimpleAgentAct]]] = []
+
+        class CapturingBatchSource:
+            def __init__(self) -> None:
+                self._store: list[
+                    list[Transition[SimpleAgentObs, SimpleAgentAct]]
+                ] = []
+
+            def ingest(
+                self, traj: list[Transition[SimpleAgentObs, SimpleAgentAct]]
+            ) -> None:
+                self._store.append(traj)
+                collected.append(traj)
+
+            def sample(
+                self, batch_size: int
+            ) -> list[Transition[SimpleAgentObs, SimpleAgentAct]]:
+                return self._store[-1][:batch_size] if self._store else []
+
+        class CapturingLearner:
+            def update(
+                self, batch: list[Transition[SimpleAgentObs, SimpleAgentAct]]
+            ) -> None:
+                updated.append(batch)
+
+        env = SimpleEnv(limit=5.0, max_steps=10)
+        agent = SimpleAgent()
+        obs_adapter = SimpleObsAdapter(limit=5.0)
+        act_adapter = SimpleActAdapter(scale=1.0)
+        rollout: SimpleRollout[
+            SimpleEnvObs, SimpleEnvAct, SimpleAgentObs, SimpleAgentAct
+        ] = SimpleRollout()
+        batch_source: CapturingBatchSource = CapturingBatchSource()
+        learner: CapturingLearner = CapturingLearner()
+
+        coordinator: GenericCoordinator[
+            SimpleEnvObs,
+            SimpleEnvAct,
+            SimpleAgentObs,
+            SimpleAgentAct,
+            list[Transition[SimpleAgentObs, SimpleAgentAct]],
+            list[Transition[SimpleAgentObs, SimpleAgentAct]],
+        ] = GenericCoordinator(
+            rollout=rollout,
+            env=env,
+            agent=agent,
+            obs_adapter=obs_adapter,
+            act_adapter=act_adapter,
+            batch_source=batch_source,
+            learner=learner,
+            batch_size=4,
+            rollouts_per_iter=2,
+            updates_per_iter=1,
+            max_iters=3,
+        )
+        coordinator.run()
+
+        assert len(collected) == 6  # 3 iters × 2 rollouts
+        assert len(updated) == 3  # 3 iters × 1 update
+
