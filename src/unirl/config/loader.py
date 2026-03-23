@@ -1,4 +1,4 @@
-"""YAML-based system configuration loader.
+"""YAML-based component configuration loader.
 
 The YAML schema selects *which* registered implementation to instantiate and
 supplies keyword arguments for each component constructor.  All typing logic
@@ -39,9 +39,7 @@ from unirl.registry.registry import (
     AGENT_REGISTRY,
     ENV_REGISTRY,
     OBS_ADAPTER_REGISTRY,
-    build_system,
 )
-from unirl.system.system import System
 
 
 def _load_component(
@@ -65,12 +63,15 @@ def load_config(path: str | Path) -> dict[str, Any]:
     return data
 
 
-def system_from_config(config: dict[str, Any]) -> System[Any, Any, Any, Any]:
-    """Build a :class:`System` from a parsed config dict.
+def components_from_config(
+    config: dict[str, Any],
+) -> tuple[Any, Any, Any, Any]:
+    """Build the four core components from a parsed config dict.
 
-    The type parameters collapse to ``Any`` at this boundary because YAML
-    cannot carry Python types — pyright enforces types on concrete call sites,
-    not here.
+    Returns ``(env, agent, obs_adapter, act_adapter)`` as plain ``Any``
+    objects.  The type parameters collapse to ``Any`` at this boundary because
+    YAML cannot carry Python types — pyright enforces types on concrete call
+    sites, not here.
     """
     # Ensure any registered example modules are imported so that their
     # @register_* decorators run before we look them up.
@@ -85,14 +86,9 @@ def system_from_config(config: dict[str, Any]) -> System[Any, Any, Any, Any]:
     act_adapter = _load_component(
         ACT_ADAPTER_REGISTRY, config["act_adapter"], "act_adapter"
     )
-    return build_system(
-        env=env,
-        agent=agent,
-        obs_adapter=obs_adapter,
-        act_adapter=act_adapter,
-    )
+    return env, agent, obs_adapter, act_adapter
 
 
-def system_from_yaml(path: str | Path) -> System[Any, Any, Any, Any]:
-    """Load a YAML file and return a fully constructed :class:`System`."""
-    return system_from_config(load_config(path))
+def components_from_yaml(path: str | Path) -> tuple[Any, Any, Any, Any]:
+    """Load a YAML file and return ``(env, agent, obs_adapter, act_adapter)``."""
+    return components_from_config(load_config(path))

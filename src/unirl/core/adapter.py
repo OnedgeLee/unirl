@@ -1,4 +1,4 @@
-"""Adapter protocols for the UniRL interface system."""
+"""Adapter protocols for the UniRL core."""
 
 from typing import Protocol
 

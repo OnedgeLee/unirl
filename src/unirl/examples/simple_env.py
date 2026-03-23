@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Any
 
-from unirl.interfaces.types import StepResult
+from unirl.core.types import StepResult
 from unirl.registry.registry import register_env
 
 
